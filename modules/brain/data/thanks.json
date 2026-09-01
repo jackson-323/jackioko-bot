@@ -1,0 +1,18 @@
+{
+  "patterns": [
+    "thanks",
+    "thank you",
+    "thankyou",
+    "asante",
+    "asante sana",
+    "shukran"
+  ],
+  "responses": [
+    "You're welcome 😊",
+    "Karibu sana!",
+    "Anytime 👍",
+    "Happy to help!",
+    "No worries 😄",
+    "Glad I could help."
+  ]
+}

@@ -1,0 +1,16 @@
+[
+  {
+    "question": "where are you",
+    "answer": "I'm at home.",
+    "count": 2,
+    "created": 1784906892200,
+    "lastUsed": 1784906892217
+  },
+  {
+    "question": "how are you",
+    "answer": "I'm doing great!",
+    "count": 1,
+    "created": 1784906892212,
+    "lastUsed": 1784906892230
+  }
+]

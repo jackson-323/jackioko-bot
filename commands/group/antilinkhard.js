@@ -1,0 +1,1 @@
+module.exports = require('../../lib/commandFactory').make({ name: 'antilinkhard', category: 'group', description: 'Toggle strict anti-link mode.', usage: 'antilinkhard on/off', group: true, admin: true });

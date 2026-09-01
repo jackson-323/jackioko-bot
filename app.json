@@ -1,0 +1,33 @@
+{
+  "name": "jackioko-tec-whatsapp-bot",
+  "description": "JACKIOKO TEC WhatsApp bot built with Node.js 22, Baileys, Express, and JSON storage.",
+  "stack": "container",
+  "env": {
+    "BOT_NAME": {
+      "description": "Display name for the bot.",
+      "value": "JACKIOKO TEC"
+    },
+    "OWNER_NUMBER": {
+      "description": "Owner WhatsApp number in international format, digits only.",
+      "required": true
+    },
+    "PREFIX": {
+      "description": "Command prefix.",
+      "value": "."
+    },
+    "LOGIN_METHOD": {
+      "description": "Use qr or pair.",
+      "value": "qr"
+    },
+    "PAIRING_NUMBER": {
+      "description": "Phone number for pair code login when LOGIN_METHOD=pair.",
+      "required": false
+    }
+  },
+  "formation": {
+    "worker": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  }
+}

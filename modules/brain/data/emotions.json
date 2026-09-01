@@ -1,0 +1,21 @@
+{
+  "patterns": [
+    "sad",
+    "happy",
+    "angry",
+    "lonely",
+    "depressed",
+    "tired",
+    "bored",
+    "crying",
+    "stress"
+  ],
+  "responses": [
+    "I'm here for you ❤️",
+    "Pole sana. Things can get better.",
+    "Take it one step at a time.",
+    "Everything will be okay. 💙",
+    "Would you like to talk about it?",
+    "I'm listening."
+  ]
+}

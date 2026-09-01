@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# WhatsApp authentication/session - NEVER upload
+auth_info_baileys/
+
+# Environment secrets
+.env
+
+# Runtime data / personal message archive
+database/memory/
+
+# Logs
+logs/
+*.log
+
+# Media/runtime files
+media/
+
+# Temporary files
+.tmp-*
+tmp/
+temp/
+
+# Python environment
+.venv/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# VS Code local settings
+.vscode/
+
+# Build output
+dist/
+build/
+
+# Backup files
+backup/
+backups/
+# Bot backups / potentially sensitive data
+database/backups/

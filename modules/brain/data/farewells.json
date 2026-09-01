@@ -1,0 +1,19 @@
+{
+  "patterns": [
+    "bye",
+    "goodbye",
+    "kwaheri",
+    "see you",
+    "later",
+    "usiku mwema",
+    "lala salama"
+  ],
+  "responses": [
+    "Bye 👋 Take care.",
+    "See you soon 😊",
+    "Kwaheri! Uwe na siku njema.",
+    "Take care and stay safe.",
+    "Tutaonana baadaye 👋",
+    "Have a great day!"
+  ]
+}

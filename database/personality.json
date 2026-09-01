@@ -1,0 +1,32 @@
+{
+  "ownerName": null,
+  "preferredLanguage": "en",
+  "greetingStyle": "warm",
+  "emojiUsage": 0.6500000000000001,
+  "sentenceLength": 8,
+  "humourLevel": 0.25,
+  "professionalTone": 0.5,
+  "slangLevel": 1,
+  "favouriteExpressions": [],
+  "commonGreetings": [
+    "yo",
+    "hi",
+    "hey"
+  ],
+  "frequentlyUsedEmojis": [
+    "😊",
+    "😫",
+    "🤲"
+  ],
+  "replyLength": "medium",
+  "conversationStyle": "concise",
+  "punctuationHabits": {
+    "exclamation": 1,
+    "question": 0,
+    "periods": 55
+  },
+  "responseSpeedPreference": "fast",
+  "writingTone": "energetic",
+  "signOffs": [],
+  "commonJokes": []
+}

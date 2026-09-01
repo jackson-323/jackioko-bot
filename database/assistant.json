@@ -1,0 +1,8 @@
+{
+  "enabled": true,
+  "awayMode": true,
+  "timeout": 15,
+  "learning": true,
+  "trustedOnly": true,
+  "notifyOwner": true
+}

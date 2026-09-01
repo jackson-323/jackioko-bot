@@ -1,0 +1,1 @@
+module.exports = require('../../lib/commandFactory').make({ name: 'add', category: 'group', description: 'Add numbers to the group.', usage: 'add 254700000000', group: true, admin: true, botAdmin: true });

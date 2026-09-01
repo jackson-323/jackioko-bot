@@ -1,0 +1,38 @@
+{
+  "name": "jackioko-tec-whatsapp-bot",
+  "version": "2.0.0",
+  "description": "JACKIOKO TEC premium WhatsApp bot built with Baileys v7, Express, and JSON storage.",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "restart": "npm run start",
+    "lint": "node --check index.js && node scripts/check-commands.js",
+    "clean": "node scripts/clean.js"
+  },
+  "keywords": [
+    "whatsapp",
+    "baileys",
+    "bot",
+    "nodejs",
+    "commonjs"
+  ],
+  "author": "JACKIOKO TEC",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "^7.0.0-rc.9",
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "fs-extra": "^11.2.0",
+    "node-cache": "^5.1.2",
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0",
+    "qrcode-terminal": "^0.12.0"
+  }
+}

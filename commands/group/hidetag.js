@@ -1,0 +1,1 @@
+module.exports = require('../../lib/commandFactory').make({ name: 'hidetag', category: 'group', description: 'Send hidden mentions to all members.', usage: 'hidetag [text]', group: true, admin: true });

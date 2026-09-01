@@ -1,0 +1,18 @@
+{
+  "prefix": ".",
+  "mode": "public",
+  "autoRead": true,
+  "autoReact": false,
+  "autoTyping": false,
+  "autoRecording": false,
+  "autoViewStatus": true,
+  "autoLikeStatus": false,
+  "autoBackup": true,
+  "commandsUsed": 28,
+  "startedAt": "2026-08-31T18:25:58.476Z",
+  "lastOwnerActivity": 1788196669465,
+  "assistant": {
+    "enabled": false,
+    "awayMode": false
+  }
+}

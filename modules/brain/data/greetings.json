@@ -1,0 +1,32 @@
+{
+  "patterns": [
+    "hi",
+    "hello",
+    "hey",
+    "yo",
+    "good morning",
+    "good afternoon",
+    "good evening",
+    "sasa",
+    "niaje",
+    "mambo",
+    "habari",
+    "vipi",
+    "uko aje",
+    "mzee",
+    "rada"
+  ],
+
+  "responses": [
+    "Hey! 👋 How are you doing?",
+    "Hello 😊 Nice to hear from you.",
+    "Sasa 😄 Niko poa. Wewe je?",
+    "Niaje! 👊",
+    "Mambo vipi? 😎",
+    "Habari yako? 😊",
+    "Karibu! How can I help you today?",
+    "Yo! What's up? 😄",
+    "Good to see your message.",
+    "I'm here 😊"
+  ]
+}
