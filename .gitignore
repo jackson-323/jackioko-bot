@@ -41,3 +41,4 @@ backup/
 backups/
 # Bot backups / potentially sensitive data
 database/backups/
+web/database/users.json

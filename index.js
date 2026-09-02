@@ -1,6 +1,9 @@
 require('dotenv').config();
 
 const express = require('express');
+const path = require('path');
+const session = require('express-session');
+const authRoutes = require('./web/routes/auth');
 const qrcode = require('qrcode-terminal');
 const pino = require('pino');
 const NodeCache = require('node-cache');
@@ -47,37 +50,204 @@ const retryCounterCache = new NodeCache({ stdTTL: 300, checkperiod: 60 });
 
 async function startHttpServer() {
   const app = express();
+
   app.disable('x-powered-by');
 
-  app.get('/', (req, res) => {
-    res.type('text').send(`${config.botName} is ${appState.status}. Uptime: ${process.uptime().toFixed(0)}s`);
+  // Middleware
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
+
+  // Login sessions
+  app.use(
+    session({
+      secret:
+        process.env.SESSION_SECRET ||
+        'techword-md-development-secret',
+
+      resave: false,
+      saveUninitialized: false,
+
+      cookie: {
+        httpOnly: true,
+        secure: false,
+        maxAge: 1000 * 60 * 60 * 24
+      }
+    })
+  );
+
+  // Authentication API
+  app.use('/api/auth', authRoutes);
+
+  // ================================
+  // WhatsApp Pairing
+  // ================================
+  app.post('/api/whatsapp/pair', async (req, res) => {
+    try {
+      // User must be logged in
+      if (!req.session.userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'You must be logged in.'
+        });
+      }
+
+      const { phoneNumber } = req.body;
+
+      if (!phoneNumber) {
+        return res.status(400).json({
+          success: false,
+          message: 'WhatsApp phone number is required.'
+        });
+      }
+
+      const number = String(phoneNumber).replace(/\D/g, '');
+
+      if (number.length < 10 || number.length > 15) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Enter a valid WhatsApp phone number with country code.'
+        });
+      }
+
+      // Make sure the bot socket exists
+      if (!appState.socket) {
+        return res.status(503).json({
+          success: false,
+          message: 'WhatsApp socket is not ready yet.'
+        });
+      }
+
+      // Current WhatsApp session is already registered
+      if (appState.socket.authState?.creds?.registered) {
+        return res.status(409).json({
+          success: false,
+          message:
+            'This WhatsApp session is already registered. A new number cannot be paired into the current session.'
+        });
+      }
+
+      const code =
+        await appState.socket.requestPairingCode(number);
+
+      logInfo(
+        `Pairing code requested by web user ${req.session.username}`
+      );
+
+      return res.json({
+        success: true,
+        pairingCode: code
+      });
+
+    } catch (error) {
+      logError(
+        'Web WhatsApp pairing failed',
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          'Failed to generate WhatsApp pairing code.'
+      });
+    }
   });
 
-  app.get('/ping', (req, res) => {
-    res.json({ ok: true, uptime: process.uptime(), timestamp: new Date().toISOString() });
+  // ================================
+  // WhatsApp Connection Status
+  // ================================
+  app.get('/api/whatsapp/status', (req, res) => {
+    // User must be logged in
+    if (!req.session.userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'You must be logged in.'
+      });
+    }
+
+    const socket = appState.socket;
+
+    return res.json({
+      success: true,
+      status: appState.status,
+      connected: appState.status === 'connected',
+      number:
+        socket?.user?.id
+          ?.split(':')[0]
+          ?.split('@')[0] || null
+    });
   });
 
+  // ================================
+  // Website
+  // ================================
+  app.use(
+    express.static(
+      path.join(__dirname, 'web', 'public')
+    )
+  );
+
+  // ================================
+  // Health Check
+  // ================================
+  app.get('/api/health', (req, res) => {
+    return res.json({
+      success: true,
+      service: 'TECHWORD-MD Web',
+      status: appState.status
+    });
+  });
+
+  // ================================
+  // Existing Bot Status
+  // ================================
   app.get('/status', (req, res) => {
-    const memory = process.memoryUsage();
-    res.json({
+    const memoryUsage = process.memoryUsage();
+
+    return res.json({
       ok: true,
       bot: config.botName,
       mode: config.mode,
       version: config.version,
       status: appState.status,
-      startedAt: new Date(appState.startedAt).toISOString(),
+      startedAt:
+        new Date(appState.startedAt).toISOString(),
       uptime: process.uptime(),
       reconnects: appState.reconnects,
       messages: appState.messages,
       commandsUsed: appState.commandsUsed,
       commandsLoaded: appState.commands.size,
-      memory
+      memory: memoryUsage
     });
   });
 
-  const port = Number(process.env.PORT || 3000);
-  app.listen(port, () => logInfo(`Express status server listening on ${port}`));
+  // ================================
+  // Ping
+  // ================================
+  app.get('/ping', (req, res) => {
+    return res.json({
+      ok: true,
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  // ================================
+  // Start Web Server
+  // ================================
+  const port = Number(
+    process.env.PORT ||
+    process.env.WEB_PORT ||
+    3000
+  );
+
+  app.listen(port, () => {
+    logInfo(
+      `TECHWORD-MD web/status server listening on ${port}`
+    );
+  });
 }
+
 
 async function startBot() {
   await ensureDatabase();
