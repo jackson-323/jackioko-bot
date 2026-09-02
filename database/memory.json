@@ -30,34 +30,9 @@
     "ongoingTopics": [
       "outgoing"
     ],
-    "lastInteractionTime": 1788196669633,
+    "lastInteractionTime": 1788299637462,
     "conversationSummary": "",
     "conversationHistory": [
-      {
-        "at": 1787861040949,
-        "incoming": "",
-        "reply": ""
-      },
-      {
-        "at": 1787861041252,
-        "incoming": "",
-        "reply": ""
-      },
-      {
-        "at": 1787861041259,
-        "incoming": "",
-        "reply": ""
-      },
-      {
-        "at": 1787861041263,
-        "incoming": "",
-        "reply": ""
-      },
-      {
-        "at": 1788086267799,
-        "incoming": "",
-        "reply": ""
-      },
       {
         "at": 1788086267971,
         "incoming": "",
@@ -130,6 +105,31 @@
       },
       {
         "at": 1788196669632,
+        "incoming": "",
+        "reply": ""
+      },
+      {
+        "at": 1788298836083,
+        "incoming": "",
+        "reply": ""
+      },
+      {
+        "at": 1788298836087,
+        "incoming": "",
+        "reply": ""
+      },
+      {
+        "at": 1788298836540,
+        "incoming": "",
+        "reply": ""
+      },
+      {
+        "at": 1788298837052,
+        "incoming": "",
+        "reply": ""
+      },
+      {
+        "at": 1788299637462,
         "incoming": "",
         "reply": ""
       }
