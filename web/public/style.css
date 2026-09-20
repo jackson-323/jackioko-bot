@@ -198,6 +198,50 @@ body {
     font-size: 18px;
 }
 
+.whatsapp-sessions-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-top: 30px;
+    margin-bottom: 14px;
+}
+
+.whatsapp-sessions-header h4 {
+    color: #e9edef;
+    font-size: 16px;
+    margin: 0;
+}
+
+.whatsapp-sessions {
+    display: grid;
+    gap: 12px;
+}
+
+.whatsapp-session-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 16px;
+    background: #111b21;
+    border: 1px solid #374045;
+    border-radius: 10px;
+}
+
+.whatsapp-session-card h5 {
+    color: #e9edef;
+    font-size: 16px;
+    margin: 0 0 6px;
+}
+
+.whatsapp-session-card p,
+.empty-sessions {
+    color: #8696a0;
+    font-size: 13px;
+    margin: 4px 0;
+}
+
 .connected {
     color: var(--green);
     font-size: 14px;
@@ -218,6 +262,32 @@ body {
 
 .btn:hover {
     background: var(--green-dark);
+}
+
+.btn-secondary {
+    background: #374045;
+}
+
+.btn-secondary:hover {
+    background: #4a585f;
+}
+
+.btn-danger {
+    background: #9b3d4f;
+    flex-shrink: 0;
+}
+
+.btn-danger:hover {
+    background: #b54b5e;
+}
+
+.btn-quiet {
+    background: transparent;
+    border: 1px solid #374045;
+}
+
+.btn-quiet:hover {
+    background: #2a3942;
 }
 
 /* Mobile */
@@ -430,6 +500,20 @@ body {
     border-color: #00a884;
 }
 
+.wa-modal-box label {
+    display: block;
+    color: #8696a0;
+    font-size: 13px;
+    margin-top: 20px;
+}
+
+.wa-modal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 20px;
+}
+
 .wa-close {
     position: absolute;
     top: 12px;
@@ -467,4 +551,21 @@ body {
 #pairButton:disabled {
     opacity: 0.6;
     cursor: wait;
+}
+
+@media (max-width: 560px) {
+    .whatsapp-sessions-header,
+    .whatsapp-session-card {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .whatsapp-sessions-header .btn,
+    .whatsapp-session-card .btn {
+        width: 100%;
+    }
+
+    .wa-modal-actions .btn {
+        flex: 1 1 100%;
+    }
 }

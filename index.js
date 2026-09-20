@@ -1,9 +1,10 @@
-require('dotenv').config();
+﻿require('dotenv').config();
 
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
 const authRoutes = require('./web/routes/auth');
+const whatsappSessionManager = require('./web/whatsapp/session-manager');
 const qrcode = require('qrcode-terminal');
 const pino = require('pino');
 const NodeCache = require('node-cache');
@@ -38,6 +39,8 @@ const appState = {
   commandsUsed: 0
 };
 
+whatsappSessionManager.setCommandState(appState);
+
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
   transport: process.env.NODE_ENV === 'production' ? undefined : {
@@ -49,6 +52,7 @@ const logger = pino({
 const retryCounterCache = new NodeCache({ stdTTL: 300, checkperiod: 60 });
 
 async function startHttpServer() {
+  await whatsappSessionManager.init();
   const app = express();
 
   app.disable('x-powered-by');
@@ -81,9 +85,8 @@ async function startHttpServer() {
   // ================================
   // WhatsApp Pairing
   // ================================
-  app.post('/api/whatsapp/pair', async (req, res) => {
+    app.post('/api/whatsapp/pair', async (req, res) => {
     try {
-      // User must be logged in
       if (!req.session.userId) {
         return res.status(401).json({
           success: false,
@@ -91,7 +94,10 @@ async function startHttpServer() {
         });
       }
 
-      const { phoneNumber } = req.body;
+      const {
+        phoneNumber,
+        numberId = 'default'
+      } = req.body;
 
       if (!phoneNumber) {
         return res.status(400).json({
@@ -100,45 +106,17 @@ async function startHttpServer() {
         });
       }
 
-      const number = String(phoneNumber).replace(/\D/g, '');
-
-      if (number.length < 10 || number.length > 15) {
-        return res.status(400).json({
-          success: false,
-          message:
-            'Enter a valid WhatsApp phone number with country code.'
-        });
-      }
-
-      // Make sure the bot socket exists
-      if (!appState.socket) {
-        return res.status(503).json({
-          success: false,
-          message: 'WhatsApp socket is not ready yet.'
-        });
-      }
-
-      // Current WhatsApp session is already registered
-      if (appState.socket.authState?.creds?.registered) {
-        return res.status(409).json({
-          success: false,
-          message:
-            'This WhatsApp session is already registered. A new number cannot be paired into the current session.'
-        });
-      }
-
-      const code =
-        await appState.socket.requestPairingCode(number);
-
-      logInfo(
-        `Pairing code requested by web user ${req.session.username}`
-      );
+      const pairingCode =
+        await whatsappSessionManager.requestPairingCode(
+          req.session.userId,
+          numberId,
+          phoneNumber
+        );
 
       return res.json({
         success: true,
-        pairingCode: code
+        pairingCode
       });
-
     } catch (error) {
       logError(
         'Web WhatsApp pairing failed',
@@ -148,16 +126,59 @@ async function startHttpServer() {
       return res.status(500).json({
         success: false,
         message:
+          error.message ||
           'Failed to generate WhatsApp pairing code.'
       });
     }
   });
 
+
   // ================================
-  // WhatsApp Connection Status
+  // Website
   // ================================
-  app.get('/api/whatsapp/status', (req, res) => {
-    // User must be logged in
+  // ================================
+  // Web WhatsApp QR
+  // ================================
+
+  app.post('/api/whatsapp/start', async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'You must be logged in.'
+        });
+      }
+
+      const numberId =
+        req.body?.numberId ||
+        'default';
+
+      await whatsappSessionManager.createSession(
+        req.session.userId,
+        numberId
+      );
+
+      return res.json({
+        success: true,
+        message: 'WhatsApp session started.'
+      });
+
+    } catch (error) {
+      logError(
+        'Failed to start web WhatsApp session',
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          error.message ||
+          'Failed to start WhatsApp session.'
+      });
+    }
+  });
+
+  app.get('/api/whatsapp/qr', (req, res) => {
     if (!req.session.userId) {
       return res.status(401).json({
         success: false,
@@ -165,22 +186,80 @@ async function startHttpServer() {
       });
     }
 
-    const socket = appState.socket;
+    const numberId =
+      req.query.numberId ||
+      'default';
+
+    const status =
+      whatsappSessionManager.getSessionStatus(
+        req.session.userId,
+        numberId
+      );
 
     return res.json({
       success: true,
-      status: appState.status,
-      connected: appState.status === 'connected',
-      number:
-        socket?.user?.id
-          ?.split(':')[0]
-          ?.split('@')[0] || null
+      qr: status.qr || null,
+      status: status.status,
+      connected: status.connected
     });
   });
 
-  // ================================
-  // Website
-  // ================================
+  app.get('/api/whatsapp/sessions', (req, res) => {
+    if (!req.session.userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'You must be logged in.'
+      });
+    }
+
+    const sessions =
+      whatsappSessionManager.getAllSessionStatuses(
+        req.session.userId
+      );
+
+    return res.json({
+      success: true,
+      sessions
+    });
+  });
+
+  app.post('/api/whatsapp/disconnect', async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'You must be logged in.'
+        });
+      }
+
+      const numberId =
+        req.body?.numberId ||
+        'default';
+
+      const disconnected =
+        await whatsappSessionManager.disconnectSession(
+          req.session.userId,
+          numberId
+        );
+
+      return res.json({
+        success: true,
+        disconnected
+      });
+    } catch (error) {
+      logError(
+        'Failed to disconnect web WhatsApp session',
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          error.message ||
+          'Failed to disconnect WhatsApp session.'
+      });
+    }
+  });
   app.use(
     express.static(
       path.join(__dirname, 'web', 'public')
@@ -392,3 +471,5 @@ process.on('SIGINT', async () => {
 
 startHttpServer().catch((error) => logError('HTTP server failed', error));
 startBot().catch((error) => logError('Bot startup failed', error));
+
+

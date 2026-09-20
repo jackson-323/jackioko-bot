@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -272,8 +272,19 @@
             </p>
 
             <button class="btn" onclick="showWhatsAppConnect()">
-    Connect WhatsApp
-</button>
+                Add WhatsApp Number
+            </button>
+
+            <div class="whatsapp-sessions-header">
+                <h4>Connected WhatsApp Numbers</h4>
+                <button class="btn btn-secondary" onclick="loadWhatsAppSessions()">
+                    Refresh
+                </button>
+            </div>
+
+            <div id="whatsappSessions" class="whatsapp-sessions">
+                <p class="empty-sessions">Loading WhatsApp sessions...</p>
+            </div>
         </section>
 
     </main>
@@ -287,46 +298,63 @@
             ×
         </button>
 
-        <h2>Connect WhatsApp</h2>
+        <h2>Add WhatsApp Number</h2>
 
-        <p>
-            Enter the WhatsApp number you want to connect.
-            Include the country code.
-        </p>
-
+        <label for="whatsappNumber">Phone number</label>
         <input
             id="whatsappNumber"
             type="tel"
-            placeholder="2547XXXXXXXX"
+            placeholder="e.g. 15551234567"
             autocomplete="tel"
         >
 
-        <button
-            id="pairButton"
-            class="btn"
-            onclick="requestPairingCode()"
+        <p>
+            Scan the QR code below using WhatsApp on your phone.
+        </p>
+
+        <div id="qrLoading" style="margin: 20px 0;">
+            Starting WhatsApp connection...
+        </div>
+
+        <div
+            id="qrBox"
+            style="
+                display: none;
+                text-align: center;
+                margin: 20px auto;
+            "
         >
-            Get Pairing Code
-        </button>
+            <img
+                id="whatsappQR"
+                alt="WhatsApp QR Code"
+                style="
+                    width: 280px;
+                    height: 280px;
+                    max-width: 100%;
+                    background: white;
+                    padding: 10px;
+                    border-radius: 12px;
+                "
+            >
+
+            <p style="margin-top: 15px;">
+                Open WhatsApp → Linked Devices → Link a Device
+                → Scan this QR code.
+            </p>
+        </div>
 
         <p id="pairMessage" class="auth-message"></p>
 
-        <div
-            id="pairCodeBox"
-            style="display: none;"
-        >
-            <div class="pair-label">
-                Your WhatsApp pairing code
-            </div>
-
-            <div id="pairCode" class="pair-code">
-                --------
-            </div>
-
-            <p>
-                On your phone, open WhatsApp → Linked Devices
-                → Link a Device → Link with phone number instead.
-            </p>
+        <div class="wa-modal-actions">
+            <button id="qrRefreshButton" class="btn" onclick="startWhatsAppQR()">
+                Connect with QR
+            </button>
+            <button id="pairButton" class="btn btn-secondary" onclick="requestWhatsAppPairingCode()">
+                Use pairing code
+            </button>
+            <button class="btn btn-quiet" onclick="closeWhatsAppConnect()">
+                Cancel
+            </button>
         </div>
 
     </div>
@@ -524,6 +552,9 @@
                 "dashboard"
             ).style.display = "flex";
 
+            loadWhatsAppSessions();
+            startWhatsAppSessionRefresh();
+
         } catch (error) {
 
             console.error(error);
@@ -560,6 +591,8 @@
             "dashboard"
         ).style.display = "none";
 
+        stopWhatsAppSessionRefresh();
+
         document.getElementById(
             "authScreen"
         ).style.display = "flex";
@@ -577,99 +610,273 @@
     // STARTUP
     // =========================
 
-    loadCurrentUser();
-function showWhatsAppConnect() {
-    document.getElementById("whatsappModal").style.display = "flex";
+    let activeWhatsAppNumberId = null;
+    let whatsappRefreshTimer = null;
 
-    document.getElementById("whatsappNumber").focus();
-
-    document.getElementById("pairMessage").textContent = "";
-
-    document.getElementById("pairCodeBox").style.display = "none";
-}
-
-function closeWhatsAppConnect() {
-    document.getElementById("whatsappModal").style.display = "none";
-}
-
-async function requestPairingCode() {
-    const numberInput =
-        document.getElementById("whatsappNumber");
-
-    const pairButton =
-        document.getElementById("pairButton");
-
-    const message =
-        document.getElementById("pairMessage");
-
-    const codeBox =
-        document.getElementById("pairCodeBox");
-
-    const codeElement =
-        document.getElementById("pairCode");
-
-    const phoneNumber =
-        numberInput.value.trim();
-
-    if (!phoneNumber) {
-        message.textContent =
-            "Please enter your WhatsApp number.";
-
-        return;
+    function startWhatsAppSessionRefresh() {
+        stopWhatsAppSessionRefresh();
+        whatsappRefreshTimer = setInterval(loadWhatsAppSessions, 5000);
     }
 
-    pairButton.disabled = true;
-    pairButton.textContent = "Generating code...";
+    function stopWhatsAppSessionRefresh() {
+        if (whatsappRefreshTimer) {
+            clearInterval(whatsappRefreshTimer);
+            whatsappRefreshTimer = null;
+        }
+    }
 
-    message.textContent = "";
-    codeBox.style.display = "none";
+    function createWhatsAppNumberId() {
+        return "wa_" + Date.now();
+    }
 
-    try {
-        const response = await fetch(
-            "/api/whatsapp/pair",
-            {
-                method: "POST",
+    function showWhatsAppConnect() {
+        activeWhatsAppNumberId = createWhatsAppNumberId();
+        document.getElementById("whatsappModal").style.display = "flex";
+        document.getElementById("whatsappNumber").value = "";
+        document.getElementById("pairMessage").textContent = "";
+        document.getElementById("qrBox").style.display = "none";
+        document.getElementById("qrLoading").textContent =
+            "Enter a phone number, then choose QR or pairing code.";
+        document.getElementById("whatsappNumber").focus();
+    }
 
-                headers: {
-                    "Content-Type": "application/json"
-                },
+    function closeWhatsAppConnect() {
+        document.getElementById("whatsappModal").style.display = "none";
+        activeWhatsAppNumberId = null;
+    }
 
-                body: JSON.stringify({
-                    phoneNumber
-                })
+    async function loadWhatsAppSessions() {
+        const container = document.getElementById("whatsappSessions");
+
+        if (!container) return;
+
+        try {
+            const response = await fetch("/api/whatsapp/sessions");
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || "Unable to load WhatsApp sessions.");
             }
-        );
 
-        const data = await response.json();
+            renderWhatsAppSessions(data.sessions || []);
+        } catch (error) {
+            console.error("WhatsApp sessions error:", error);
+            container.innerHTML =
+                '<p class="empty-sessions">Unable to load WhatsApp sessions.</p>';
+        }
+    }
 
-        if (!response.ok) {
-            message.textContent =
-                data.message ||
-                "Unable to generate pairing code.";
+    function renderWhatsAppSessions(sessions) {
+        const container = document.getElementById("whatsappSessions");
 
+        if (!sessions.length) {
+            container.innerHTML =
+                '<p class="empty-sessions">No WhatsApp numbers connected yet.</p>';
             return;
         }
 
-        codeElement.textContent =
-            data.pairingCode;
+        container.innerHTML = sessions.map((session) => {
+            const state = session.connected ? "Connected" : "Disconnected";
+            const number = session.number || "Number pending";
+            const qrState = session.qr ? "QR ready to scan" : "No QR pending";
 
-        codeBox.style.display = "block";
-
-        message.textContent =
-            "Pairing code generated successfully.";
-
-    } catch (error) {
-        console.error(error);
-
-        message.textContent =
-            "Unable to connect to the server.";
-    } finally {
-        pairButton.disabled = false;
-        pairButton.textContent =
-            "Get Pairing Code";
+            return `
+                <article class="whatsapp-session-card">
+                    <div>
+                        <h5>${escapeWhatsAppHtml(number)}</h5>
+                        <p>Account: ${escapeWhatsAppHtml(session.numberId)}</p>
+                        <p>Status: ${escapeWhatsAppHtml(session.status)} · ${state}</p>
+                        <p>${qrState}</p>
+                    </div>
+                    <button class="btn btn-danger" onclick="disconnectWhatsApp('${escapeWhatsAppAttribute(session.numberId)}')">
+                        Disconnect
+                    </button>
+                </article>
+            `;
+        }).join("");
     }
-}
-</script>
 
+    function escapeWhatsAppHtml(value) {
+        return String(value || "").replace(/[&<>'"]/g, (character) => ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            "'": "&#39;",
+            '"': "&quot;"
+        }[character]));
+    }
+
+    function escapeWhatsAppAttribute(value) {
+        return String(value || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+    }
+
+    async function startWhatsAppQR() {
+        const numberId = activeWhatsAppNumberId;
+        const phoneNumber = document.getElementById("whatsappNumber").value.trim();
+        const button = document.getElementById("qrRefreshButton");
+        const loading = document.getElementById("qrLoading");
+        const qrBox = document.getElementById("qrBox");
+        const qrImage = document.getElementById("whatsappQR");
+        const message = document.getElementById("pairMessage");
+
+        if (!numberId || !phoneNumber) {
+            message.textContent = "Enter a WhatsApp phone number first.";
+            return;
+        }
+
+        button.disabled = true;
+        button.textContent = "Starting...";
+        loading.style.display = "block";
+        loading.textContent = "Starting WhatsApp connection...";
+        qrBox.style.display = "none";
+        message.textContent = "";
+
+        try {
+            const response = await fetch("/api/whatsapp/start", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ numberId })
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || "Unable to start WhatsApp session.");
+            }
+
+            pollWhatsAppQR(numberId);
+        } catch (error) {
+            message.textContent = error.message || "Unable to start WhatsApp.";
+            button.disabled = false;
+            button.textContent = "Connect with QR";
+        }
+    }
+
+    async function pollWhatsAppQR(numberId, attempts = 0) {
+        const button = document.getElementById("qrRefreshButton");
+        const loading = document.getElementById("qrLoading");
+        const qrBox = document.getElementById("qrBox");
+        const qrImage = document.getElementById("whatsappQR");
+        const message = document.getElementById("pairMessage");
+
+        try {
+            const response = await fetch(
+                "/api/whatsapp/qr?numberId=" + encodeURIComponent(numberId)
+            );
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || "Unable to get QR code.");
+            }
+
+            if (data.connected) {
+                loading.textContent = "WhatsApp connected successfully.";
+                qrBox.style.display = "none";
+                message.textContent = "This number is now connected.";
+                button.disabled = false;
+                button.textContent = "Connected";
+                await loadWhatsAppSessions();
+                return;
+            }
+
+            if (data.qr) {
+                qrImage.src = data.qr;
+                loading.style.display = "none";
+                qrBox.style.display = "block";
+                button.disabled = false;
+                button.textContent = "Refresh QR";
+                return;
+            }
+
+            if (attempts < 60) {
+                setTimeout(() => pollWhatsAppQR(numberId, attempts + 1), 1000);
+                return;
+            }
+
+            throw new Error("QR code was not received. Try again.");
+        } catch (error) {
+            if (attempts < 10) {
+                setTimeout(() => pollWhatsAppQR(numberId, attempts + 1), 1000);
+                return;
+            }
+
+            loading.style.display = "none";
+            message.textContent = error.message || "Unable to get QR code.";
+            button.disabled = false;
+            button.textContent = "Try Again";
+        }
+    }
+
+    async function requestWhatsAppPairingCode() {
+        const numberId = activeWhatsAppNumberId;
+        const phoneNumber = document.getElementById("whatsappNumber").value.trim();
+        const message = document.getElementById("pairMessage");
+        const button = document.getElementById("pairButton");
+
+        if (!numberId || !phoneNumber) {
+            message.textContent = "Enter a WhatsApp phone number first.";
+            return;
+        }
+
+        button.disabled = true;
+        message.textContent = "Requesting pairing code...";
+
+        try {
+            const startResponse = await fetch("/api/whatsapp/start", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ numberId })
+            });
+
+            if (!startResponse.ok) {
+                const startData = await startResponse.json();
+                throw new Error(startData.message || "Unable to start WhatsApp session.");
+            }
+
+            const response = await fetch("/api/whatsapp/pair", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ numberId, phoneNumber })
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || "Unable to generate pairing code.");
+            }
+
+            message.textContent = "Pairing code: " + data.pairingCode;
+            await loadWhatsAppSessions();
+        } catch (error) {
+            message.textContent = error.message || "Unable to generate pairing code.";
+        } finally {
+            button.disabled = false;
+        }
+    }
+
+    async function disconnectWhatsApp(numberId) {
+        try {
+            const response = await fetch("/api/whatsapp/disconnect", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ numberId })
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || "Unable to disconnect WhatsApp.");
+            }
+
+            await loadWhatsAppSessions();
+        } catch (error) {
+            console.error("WhatsApp disconnect error:", error);
+        }
+    }
+
+    loadCurrentUser();
+</script>
 </body>
 </html>
+
+
+
+
+
