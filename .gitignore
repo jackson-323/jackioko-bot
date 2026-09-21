@@ -42,3 +42,6 @@ backups/
 # Bot backups / potentially sensitive data
 database/backups/
 web/database/users.json
+
+# WhatsApp session credentials
+database/whatsapp_sessions/
