@@ -26,8 +26,9 @@ const MemoryBackup = require('./backup');
 const MemoryLogger = require('./logger');
 
 class MemorySystem {
-  constructor() {
-    this.enabled = true;
+  constructor(options = {}) {
+    this.baseDir = options.baseDir || config.databaseDir;
+    this.memoryRoot = options.memoryRoot || path.join(this.baseDir, 'memory');    this.enabled = true;
     this.storage = null;
     this.indexer = null;
     this.extractor = null;
@@ -63,7 +64,7 @@ class MemorySystem {
    */
   loadConfig() {
     try {
-      const configFile = path.join(config.databaseDir, 'memory_config.json');
+      const configFile = path.join(this.baseDir, 'memory_config.json');
       if (fs.pathExistsSync(configFile)) {
         return fs.readJsonSync(configFile, { throws: false }) || {};
       }
@@ -78,7 +79,7 @@ class MemorySystem {
    */
   saveConfig() {
     try {
-      const configFile = path.join(config.databaseDir, 'memory_config.json');
+      const configFile = path.join(this.baseDir, 'memory_config.json');
       fs.ensureDirSync(config.databaseDir);
       fs.writeJsonSync(configFile, this.config, { spaces: 2 });
     } catch (error) {
@@ -93,9 +94,16 @@ class MemorySystem {
     if (this.initialized) return;
 
     try {
-      this.memoryLogger = new MemoryLogger();
-      await this.memoryLogger.init();
-      this.storage = new Storage(config.databaseDir, this.memoryLogger);
+      this.memoryLogger = new MemoryLogger(
+  path.join(this.memoryRoot, 'logs')
+);
+
+await this.memoryLogger.init();
+
+this.storage = new Storage(
+  this.baseDir,
+  this.memoryLogger
+);
       this.indexer = new Indexer(this.storage);
       this.extractor = new Extractor();
       this.backup = new MemoryBackup(this.storage, this.memoryLogger);
@@ -349,5 +357,12 @@ class MemorySystem {
   }
 }
 
-// Export singleton instance
-module.exports = new MemorySystem();
+// Keep the original singleton for the existing bot.
+const defaultMemory = new MemorySystem();
+
+// Create an independent memory system for a specific account/session.
+defaultMemory.createInstance = function (options = {}) {
+  return new MemorySystem(options);
+};
+
+module.exports = defaultMemory;
