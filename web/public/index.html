@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>TECHWORD-MD</title>
+    <title>JACKIOKO TEC</title>
 
     <link rel="stylesheet" href="style.css">
 </head>
@@ -20,7 +20,7 @@
     <div class="auth-box">
 
         <div class="auth-logo">
-            TECHWORD<span>-MD</span>
+            JACKIOKO TEC
         </div>
 
         <p class="auth-subtitle">
@@ -74,7 +74,7 @@
             <h2>Create account</h2>
 
             <p class="auth-description">
-                Create your private TECHWORD-MD account.
+                Create your private JACKIOKO TEC account.
             </p>
 
             <input
@@ -122,27 +122,27 @@
     <aside class="sidebar">
 
         <div class="logo">
-            TECHWORD<span>-MD</span>
+            JACKIOKO TEC
         </div>
 
         <nav class="nav">
 
-            <a href="#" class="nav-item active">
+            <a href="#" class="nav-item active" data-view="dashboard" onclick="navigatePortalView('dashboard', event)">
                 <span class="nav-icon">⌂</span>
                 <span class="nav-text">Dashboard</span>
             </a>
 
-            <a href="#" class="nav-item">
+            <a href="#" class="nav-item" data-view="whatsapp" onclick="navigatePortalView('whatsapp', event)">
                 <span class="nav-icon">📱</span>
                 <span class="nav-text">WhatsApp</span>
             </a>
 
-            <a href="#" class="nav-item">
+            <a href="#" class="nav-item" data-view="archive" onclick="navigatePortalView('archive', event)">
                 <span class="nav-icon">🗄️</span>
                 <span class="nav-text">Archive</span>
             </a>
 
-            <a href="#" class="nav-item">
+            <a href="#" class="nav-item" data-view="settings" onclick="navigatePortalView('settings', event)">
                 <span class="nav-icon">⚙</span>
                 <span class="nav-text">Settings</span>
             </a>
@@ -174,7 +174,7 @@
 
         <div class="topbar">
 
-            <h1>Dashboard</h1>
+            <h1 id="pageTitle">Dashboard</h1>
 
             <div class="status">
                 <span class="status-dot"></span>
@@ -186,10 +186,11 @@
 
         <!-- Welcome -->
 
+        <div id="dashboardView" class="portal-view" data-view-panel="dashboard">
         <section class="welcome">
 
             <h2>
-                Welcome to TECHWORD-MD 👋
+                Welcome to JACKIOKO TEC 👋
             </h2>
 
             <p>
@@ -251,10 +252,68 @@
 
         </section>
 
+        </div>
+
+        <section id="archiveView" class="portal-view archive-page" data-view-panel="archive" style="display: none;">
+            <div class="archive-heading">
+                <div>
+                    <p class="archive-eyebrow">PRIVATE MESSAGE ARCHIVE</p>
+                    <h2>WhatsApp archive</h2>
+                    <p class="archive-subtitle">Browse messages stored for your connected numbers.</p>
+                </div>
+                <button class="btn btn-secondary" type="button" onclick="loadArchiveNumbers()">Refresh archive</button>
+            </div>
+
+            <div id="archiveNotice" class="archive-notice" role="status"></div>
+
+            <div class="archive-layout">
+                <aside class="archive-numbers-panel">
+                    <div class="archive-panel-heading">
+                        <h3>WhatsApp numbers</h3>
+                        <span id="archiveNumberCount" class="archive-count">0</span>
+                    </div>
+                    <div id="archiveNumbers" class="archive-numbers-list">
+                        <p class="archive-muted">Loading numbers...</p>
+                    </div>
+                </aside>
+
+                <div class="archive-content">
+                    <div class="archive-toolbar">
+                        <div>
+                            <p class="archive-eyebrow">SELECTED NUMBER</p>
+                            <h3 id="archiveSelectedNumber">Choose a number</h3>
+                        </div>
+                        <div class="archive-search">
+                            <label class="sr-only" for="archiveSearch">Search messages</label>
+                            <input id="archiveSearch" type="search" placeholder="Search message text">
+                            <button class="btn" type="button" onclick="searchArchive()">Search</button>
+                        </div>
+                    </div>
+
+                    <div class="archive-filters">
+                        <label>Sender<input id="archiveSender" type="text" placeholder="Sender JID"></label>
+                        <label>Chat<input id="archiveChat" type="text" placeholder="Chat JID"></label>
+                        <label>From<input id="archiveFrom" type="date"></label>
+                        <label>To<input id="archiveTo" type="date"></label>
+                        <button class="btn btn-quiet" type="button" onclick="clearArchiveFilters()">Clear</button>
+                    </div>
+
+                    <div id="archiveStats" class="archive-stats" aria-live="polite">
+                        <p class="archive-muted">Select a number to see its statistics.</p>
+                    </div>
+
+                    <div id="archiveMessages" class="archive-messages" aria-live="polite">
+                        <p class="archive-empty">Select a WhatsApp number to view messages.</p>
+                    </div>
+                    <button id="archiveLoadMore" class="btn btn-secondary archive-load-more" type="button" onclick="loadMoreArchiveMessages()" style="display: none;">Load more messages</button>
+                </div>
+            </div>
+        </section>
+
 
         <!-- WhatsApp -->
 
-        <section class="connection">
+        <section id="whatsappView" class="connection portal-view" data-view-panel="whatsapp">
 
             <div class="connection-header">
 
@@ -869,6 +928,292 @@
         } catch (error) {
             console.error("WhatsApp disconnect error:", error);
         }
+    }
+
+    // =========================
+    // PORTAL NAVIGATION
+    // =========================
+
+    const portalViewTitles = {
+        dashboard: "Dashboard",
+        whatsapp: "WhatsApp",
+        archive: "Archive",
+        settings: "Settings"
+    };
+
+    let archiveNumbers = [];
+    let selectedArchiveNumberId = null;
+    let archivePage = 1;
+    let archiveHasMore = false;
+    let archiveLoading = false;
+    let archiveRequestToken = 0;
+
+    function navigatePortalView(viewName, event) {
+        if (event) {
+            event.preventDefault();
+        }
+
+        const supportedView = ["dashboard", "whatsapp", "archive"].includes(viewName)
+            ? viewName
+            : "dashboard";
+
+        document.querySelectorAll("[data-view-panel]").forEach((panel) => {
+            const panelView = panel.dataset.viewPanel;
+            const visible = supportedView === "dashboard"
+                ? ["dashboard", "whatsapp"].includes(panelView)
+                : panelView === supportedView;
+            panel.style.display = visible ? "" : "none";
+        });
+
+        document.querySelectorAll(".nav-item[data-view]").forEach((item) => {
+            item.classList.toggle("active", item.dataset.view === supportedView);
+        });
+
+        document.getElementById("pageTitle").textContent = portalViewTitles[supportedView];
+
+        if (supportedView === "archive") {
+            loadArchiveNumbers();
+        }
+    }
+
+    function setArchiveNotice(message, isError = false) {
+        const notice = document.getElementById("archiveNotice");
+        notice.textContent = message || "";
+        notice.style.color = isError ? "#f08a8a" : "";
+    }
+
+    function archiveApiError(response, data, fallback) {
+        if (response.status === 401) {
+            showLogin();
+            document.getElementById("dashboard").style.display = "none";
+        }
+        return new Error(data.error || fallback);
+    }
+
+    function formatArchiveNumber(number) {
+        return number || "Number pending";
+    }
+
+    async function loadArchiveNumbers() {
+        const container = document.getElementById("archiveNumbers");
+        if (!container) return;
+
+        container.innerHTML = '<p class="archive-muted">Loading numbers...</p>';
+        setArchiveNotice("");
+
+        try {
+            const response = await fetch("/api/archive/numbers");
+            const data = await response.json();
+            if (!response.ok) {
+                throw archiveApiError(response, data, "Unable to load archive numbers.");
+            }
+
+            archiveNumbers = Array.isArray(data.data) ? data.data : [];
+            document.getElementById("archiveNumberCount").textContent = archiveNumbers.length;
+            renderArchiveNumbers();
+
+            if (!archiveNumbers.length) {
+                selectedArchiveNumberId = null;
+                resetArchiveContent("No WhatsApp numbers are available yet.");
+                return;
+            }
+
+            const selectedStillExists = archiveNumbers.some((number) => number.numberId === selectedArchiveNumberId);
+            if (!selectedStillExists) {
+                selectArchiveNumber(archiveNumbers[0].numberId);
+            } else {
+                renderArchiveNumbers();
+            }
+        } catch (error) {
+            container.innerHTML = '<p class="archive-muted">Unable to load numbers.</p>';
+            setArchiveNotice(error.message || "Unable to load archive numbers.", true);
+        }
+    }
+
+    function renderArchiveNumbers() {
+        const container = document.getElementById("archiveNumbers");
+        if (!archiveNumbers.length) {
+            container.innerHTML = '<p class="archive-muted">No WhatsApp numbers connected.</p>';
+            return;
+        }
+
+        container.innerHTML = archiveNumbers.map((number) => `
+            <button class="archive-number ${number.numberId === selectedArchiveNumberId ? "active" : ""}" type="button" onclick="selectArchiveNumber('${escapeWhatsAppAttribute(number.numberId)}')">
+                <strong>${escapeWhatsAppHtml(formatArchiveNumber(number.number))}</strong>
+                <small>${escapeWhatsAppHtml(number.status || "disconnected")} · ${Number(number.messageCount || 0).toLocaleString()} messages</small>
+            </button>
+        `).join("");
+    }
+
+    function resetArchiveContent(message) {
+        document.getElementById("archiveSelectedNumber").textContent = "Choose a number";
+        document.getElementById("archiveStats").innerHTML = `<p class="archive-muted">${escapeWhatsAppHtml(message)}</p>`;
+        document.getElementById("archiveMessages").innerHTML = `<p class="archive-empty">${escapeWhatsAppHtml(message)}</p>`;
+        document.getElementById("archiveLoadMore").style.display = "none";
+    }
+
+    function selectArchiveNumber(numberId) {
+        if (!archiveNumbers.some((number) => number.numberId === numberId)) {
+            return;
+        }
+
+        selectedArchiveNumberId = numberId;
+        archivePage = 1;
+        archiveHasMore = false;
+        renderArchiveNumbers();
+
+        const selected = archiveNumbers.find((number) => number.numberId === numberId);
+        document.getElementById("archiveSelectedNumber").textContent = formatArchiveNumber(selected.number) + " · " + numberId;
+        loadArchiveStats(numberId);
+        loadArchiveMessages(true);
+    }
+
+    function buildArchiveQuery(page) {
+        const query = new URLSearchParams({ page: String(page), limit: "50" });
+        const search = document.getElementById("archiveSearch").value.trim();
+        const sender = document.getElementById("archiveSender").value.trim();
+        const chat = document.getElementById("archiveChat").value.trim();
+        const from = document.getElementById("archiveFrom").value;
+        const to = document.getElementById("archiveTo").value;
+
+        if (search) query.set("search", search);
+        if (sender) query.set("sender", sender);
+        if (chat) query.set("chat", chat);
+        if (from) query.set("from", from);
+        if (to) query.set("to", to + "T23:59:59.999");
+        return query;
+    }
+
+    async function loadArchiveMessages(reset = false) {
+        if (!selectedArchiveNumberId || archiveLoading) return;
+        if (!reset && !archiveHasMore) return;
+
+        archiveLoading = true;
+        const requestToken = ++archiveRequestToken;
+        const container = document.getElementById("archiveMessages");
+        const loadMoreButton = document.getElementById("archiveLoadMore");
+        if (reset) {
+            container.innerHTML = '<p class="archive-muted">Loading messages...</p>';
+            archivePage = 1;
+        } else {
+            loadMoreButton.disabled = true;
+            loadMoreButton.textContent = "Loading...";
+        }
+
+        try {
+            const query = buildArchiveQuery(archivePage);
+            const response = await fetch("/api/archive/" + encodeURIComponent(selectedArchiveNumberId) + "/messages?" + query.toString());
+            const data = await response.json();
+            if (!response.ok) {
+                throw archiveApiError(response, data, "Unable to load archive messages.");
+            }
+            if (requestToken !== archiveRequestToken) return;
+
+            const result = data.data || {};
+            const messages = Array.isArray(result.messages) ? result.messages : [];
+            if (reset) {
+                container.innerHTML = "";
+            }
+            if (!messages.length && reset) {
+                container.innerHTML = '<p class="archive-empty">No messages match the current filters.</p>';
+            } else {
+                container.insertAdjacentHTML("beforeend", messages.map(renderArchiveMessage).join(""));
+            }
+
+            archiveHasMore = Boolean(result.hasMore);
+            if (archiveHasMore) {
+                archivePage += 1;
+                loadMoreButton.style.display = "block";
+                loadMoreButton.disabled = false;
+                loadMoreButton.textContent = "Load more messages";
+            } else {
+                loadMoreButton.style.display = "none";
+            }
+        } catch (error) {
+            if (reset) {
+                container.innerHTML = '<p class="archive-empty">Unable to load messages.</p>';
+            }
+            setArchiveNotice(error.message || "Unable to load archive messages.", true);
+            loadMoreButton.disabled = false;
+            loadMoreButton.textContent = "Load more messages";
+        } finally {
+            archiveLoading = false;
+        }
+    }
+
+    function loadMoreArchiveMessages() {
+        loadArchiveMessages(false);
+    }
+
+    function renderArchiveMessage(message) {
+        const timestamp = Number(message.timestamp);
+        const date = Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString() : "Unknown time";
+        const sender = message.fromMe ? "Me" : (message.sender || "Unknown sender");
+        const text = message.text || (message.mediaInfo && message.mediaInfo.caption) || "";
+        const media = message.mediaType || (message.mediaInfo && message.mediaInfo.type);
+        const tags = [
+            message.chat ? "Chat: " + message.chat : "",
+            message.messageType ? "Type: " + message.messageType : "",
+            media ? "Media: " + media : "",
+            message.groupName ? "Group: " + message.groupName : "",
+            message.fromMe ? "Outgoing" : "Incoming"
+        ].filter(Boolean);
+
+        return `
+            <article class="archive-message ${message.fromMe ? "from-me" : ""}">
+                <div class="archive-message-header">
+                    <strong>${escapeWhatsAppHtml(sender)}</strong>
+                    <time class="archive-message-time">${escapeWhatsAppHtml(date)}</time>
+                </div>
+                <div class="archive-message-text">${escapeWhatsAppHtml(text || "[No text content]")}</div>
+                <div class="archive-message-meta">${tags.map((tag) => `<span class="archive-tag">${escapeWhatsAppHtml(tag)}</span>`).join("")}</div>
+            </article>
+        `;
+    }
+
+    async function loadArchiveStats(numberId) {
+        const container = document.getElementById("archiveStats");
+        container.innerHTML = '<p class="archive-muted">Loading statistics...</p>';
+
+        try {
+            const response = await fetch("/api/archive/" + encodeURIComponent(numberId) + "/stats");
+            const data = await response.json();
+            if (!response.ok) {
+                throw archiveApiError(response, data, "Unable to load archive statistics.");
+            }
+
+            const result = data.data || {};
+            const total = result.total || {};
+            const stats = [
+                ["Total messages", total.total],
+                ["Incoming", total.incoming],
+                ["Outgoing", total.outgoing],
+                ["Private", total.private],
+                ["Groups", total.groups]
+            ].filter((item) => item[1] !== undefined && item[1] !== null);
+
+            container.innerHTML = stats.length
+                ? stats.map((item) => `<div class="archive-stat"><strong>${Number(item[1]).toLocaleString()}</strong><span>${escapeWhatsAppHtml(item[0])}</span></div>`).join("")
+                : '<p class="archive-muted">No statistics available for this number.</p>';
+        } catch (error) {
+            container.innerHTML = '<p class="archive-muted">Unable to load statistics.</p>';
+            setArchiveNotice(error.message || "Unable to load archive statistics.", true);
+        }
+    }
+
+    function searchArchive() {
+        if (selectedArchiveNumberId) {
+            archivePage = 1;
+            archiveHasMore = true;
+            loadArchiveMessages(true);
+        }
+    }
+
+    function clearArchiveFilters() {
+        ["archiveSearch", "archiveSender", "archiveChat", "archiveFrom", "archiveTo"].forEach((id) => {
+            document.getElementById(id).value = "";
+        });
+        searchArchive();
     }
 
     loadCurrentUser();

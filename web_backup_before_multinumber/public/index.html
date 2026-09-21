@@ -1,0 +1,783 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>JACKIOKO TEC</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<!-- =========================
+     AUTH SCREEN
+========================= -->
+
+<div id="authScreen" class="auth-screen">
+
+    <div class="auth-box">
+
+        <div class="auth-logo">
+            JACKIOKO TEC
+        </div>
+
+        <p class="auth-subtitle">
+            Private WhatsApp Archive Platform
+        </p>
+
+        <!-- Login -->
+
+        <div id="loginForm">
+
+            <h2>Welcome back</h2>
+
+            <p class="auth-description">
+                Sign in to access your archive dashboard.
+            </p>
+
+            <input
+                id="loginUsername"
+                type="text"
+                placeholder="Username"
+                autocomplete="username"
+            >
+
+            <input
+                id="loginPassword"
+                type="password"
+                placeholder="Password"
+                autocomplete="current-password"
+            >
+
+            <button class="btn auth-btn" onclick="login()">
+                Login
+            </button>
+
+            <p id="loginMessage" class="auth-message"></p>
+
+            <p class="switch-auth">
+                Don't have an account?
+                <button onclick="showRegister()">
+                    Create account
+                </button>
+            </p>
+
+        </div>
+
+
+        <!-- Register -->
+
+        <div id="registerForm" style="display: none;">
+
+            <h2>Create account</h2>
+
+            <p class="auth-description">
+                Create your private JACKIOKO TEC account.
+            </p>
+
+            <input
+                id="registerUsername"
+                type="text"
+                placeholder="Choose a username"
+                autocomplete="username"
+            >
+
+            <input
+                id="registerPassword"
+                type="password"
+                placeholder="Password (minimum 6 characters)"
+                autocomplete="new-password"
+            >
+
+            <button class="btn auth-btn" onclick="register()">
+                Create Account
+            </button>
+
+            <p id="registerMessage" class="auth-message"></p>
+
+            <p class="switch-auth">
+                Already have an account?
+                <button onclick="showLogin()">
+                    Login
+                </button>
+            </p>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- =========================
+     DASHBOARD
+========================= -->
+
+<div id="dashboard" class="app" style="display: none;">
+
+    <!-- Sidebar -->
+
+    <aside class="sidebar">
+
+        <div class="logo">
+            JACKIOKO TEC
+        </div>
+
+        <nav class="nav">
+
+            <a href="#" class="nav-item active">
+                <span class="nav-icon">âŒ‚</span>
+                <span class="nav-text">Dashboard</span>
+            </a>
+
+            <a href="#" class="nav-item">
+                <span class="nav-icon">ðŸ“±</span>
+                <span class="nav-text">WhatsApp</span>
+            </a>
+
+            <a href="#" class="nav-item">
+                <span class="nav-icon">ðŸ—„ï¸</span>
+                <span class="nav-text">Archive</span>
+            </a>
+
+            <a href="#" class="nav-item">
+                <span class="nav-icon">âš™</span>
+                <span class="nav-text">Settings</span>
+            </a>
+
+        </nav>
+
+        <div class="sidebar-user">
+
+            <div class="user-label">
+                Logged in as
+            </div>
+
+            <div id="currentUsername" class="username">
+                â€”
+            </div>
+
+            <button class="logout-btn" onclick="logout()">
+                Logout
+            </button>
+
+        </div>
+
+    </aside>
+
+
+    <!-- Main content -->
+
+    <main class="main">
+
+        <div class="topbar">
+
+            <h1>Dashboard</h1>
+
+            <div class="status">
+                <span class="status-dot"></span>
+                System Online
+            </div>
+
+        </div>
+
+
+        <!-- Welcome -->
+
+        <section class="welcome">
+
+            <h2>
+                Welcome to JACKIOKO TEC ðŸ‘‹
+            </h2>
+
+            <p>
+                Your private WhatsApp archive platform.
+                Connect your WhatsApp account and securely manage
+                your archived messages.
+            </p>
+
+        </section>
+
+
+        <!-- Cards -->
+
+        <section class="cards">
+
+            <div class="card">
+
+                <div class="card-icon">ðŸ’¬</div>
+
+                <div class="card-title">
+                    Archived Messages
+                </div>
+
+                <div class="card-value">
+                    â€”
+                </div>
+
+            </div>
+
+
+            <div class="card">
+
+                <div class="card-icon">ðŸ“±</div>
+
+                <div class="card-title">
+                    WhatsApp
+                </div>
+
+                <div class="card-value">
+                    Not Connected
+                </div>
+
+            </div>
+
+
+            <div class="card">
+
+                <div class="card-icon">ðŸ—„ï¸</div>
+
+                <div class="card-title">
+                    Archive Status
+                </div>
+
+                <div class="card-value">
+                    Ready
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- WhatsApp -->
+
+        <section class="connection">
+
+            <div class="connection-header">
+
+                <h3>WhatsApp Connection</h3>
+
+                <span class="connected">
+                    â— Ready to connect
+                </span>
+
+            </div>
+
+            <p style="color: #8696a0; margin-bottom: 20px;">
+                Connect a WhatsApp account to start archiving
+                messages.
+            </p>
+
+            <button class="btn" onclick="showWhatsAppConnect()">
+    Connect WhatsApp
+</button>
+        </section>
+
+    </main>
+
+</div>
+
+<div id="whatsappModal" class="wa-modal" style="display: none;">
+    <div class="wa-modal-box">
+
+        <button class="wa-close" onclick="closeWhatsAppConnect()">
+            ×
+        </button>
+
+        <h2>Connect WhatsApp</h2>
+
+        <p>
+            Scan the QR code below using WhatsApp on your phone.
+        </p>
+
+        <div id="qrLoading" style="margin: 20px 0;">
+            Starting WhatsApp connection...
+        </div>
+
+        <div
+            id="qrBox"
+            style="
+                display: none;
+                text-align: center;
+                margin: 20px auto;
+            "
+        >
+            <img
+                id="whatsappQR"
+                alt="WhatsApp QR Code"
+                style="
+                    width: 280px;
+                    height: 280px;
+                    max-width: 100%;
+                    background: white;
+                    padding: 10px;
+                    border-radius: 12px;
+                "
+            >
+
+            <p style="margin-top: 15px;">
+                Open WhatsApp → Linked Devices → Link a Device
+                → Scan this QR code.
+            </p>
+        </div>
+
+        <p id="pairMessage" class="auth-message"></p>
+
+        <button
+            id="qrRefreshButton"
+            class="btn"
+            onclick="startWhatsAppQR()"
+        >
+            Start WhatsApp
+        </button>
+
+    </div>
+</div><div id="pairCode" class="pair-code">
+                --------
+            </div>
+
+            <p>
+                On your phone, open WhatsApp â†’ Linked Devices
+                â†’ Link a Device â†’ Link with phone number instead.
+            </p>
+        </div>
+
+    </div>
+</div>
+<script>
+
+    // =========================
+    // AUTH UI
+    // =========================
+
+    function showRegister() {
+
+        document.getElementById("loginForm").style.display = "none";
+        document.getElementById("registerForm").style.display = "block";
+
+    }
+
+
+    function showLogin() {
+
+        document.getElementById("registerForm").style.display = "none";
+        document.getElementById("loginForm").style.display = "block";
+
+    }
+
+
+    // =========================
+    // REGISTER
+    // =========================
+
+    async function register() {
+
+        const username =
+            document.getElementById("registerUsername").value.trim();
+
+        const password =
+            document.getElementById("registerPassword").value;
+
+        const message =
+            document.getElementById("registerMessage");
+
+        message.textContent = "Creating account...";
+
+        try {
+
+            const response = await fetch(
+                "/api/auth/register",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+
+                    body: JSON.stringify({
+                        username,
+                        password
+                    })
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+
+                message.textContent =
+                    data.message || "Registration failed.";
+
+                return;
+            }
+
+            message.textContent =
+                "Account created! You can now login.";
+
+            document.getElementById(
+                "registerUsername"
+            ).value = "";
+
+            document.getElementById(
+                "registerPassword"
+            ).value = "";
+
+            setTimeout(() => {
+                showLogin();
+            }, 1000);
+
+        } catch (error) {
+
+            console.error(error);
+
+            message.textContent =
+                "Unable to connect to the server.";
+
+        }
+
+    }
+
+
+    // =========================
+    // LOGIN
+    // =========================
+
+    async function login() {
+
+        const username =
+            document.getElementById("loginUsername").value.trim();
+
+        const password =
+            document.getElementById("loginPassword").value;
+
+        const message =
+            document.getElementById("loginMessage");
+
+        message.textContent = "Logging in...";
+
+        try {
+
+            const response = await fetch(
+                "/api/auth/login",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+
+                    body: JSON.stringify({
+                        username,
+                        password
+                    })
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+
+                message.textContent =
+                    data.message || "Login failed.";
+
+                return;
+            }
+
+            await loadCurrentUser();
+
+        } catch (error) {
+
+            console.error(error);
+
+            message.textContent =
+                "Unable to connect to the server.";
+
+        }
+
+    }
+
+
+    // =========================
+    // CHECK CURRENT SESSION
+    // =========================
+
+    async function loadCurrentUser() {
+
+        try {
+
+            const response = await fetch(
+                "/api/auth/me"
+            );
+
+            if (!response.ok) {
+
+                showLogin();
+
+                return;
+            }
+
+            const data = await response.json();
+
+            if (!data.success) {
+
+                showLogin();
+
+                return;
+            }
+
+            document.getElementById(
+                "currentUsername"
+            ).textContent = data.user.username;
+
+            document.getElementById(
+                "authScreen"
+            ).style.display = "none";
+
+            document.getElementById(
+                "dashboard"
+            ).style.display = "flex";
+
+        } catch (error) {
+
+            console.error(error);
+
+            showLogin();
+
+        }
+
+    }
+
+
+    // =========================
+    // LOGOUT
+    // =========================
+
+    async function logout() {
+
+        try {
+
+            await fetch(
+                "/api/auth/logout",
+                {
+                    method: "POST"
+                }
+            );
+
+        } catch (error) {
+
+            console.error(error);
+
+        }
+
+        document.getElementById(
+            "dashboard"
+        ).style.display = "none";
+
+        document.getElementById(
+            "authScreen"
+        ).style.display = "flex";
+
+        document.getElementById(
+            "loginPassword"
+        ).value = "";
+
+        showLogin();
+
+    }
+
+
+    // =========================
+    // STARTUP
+    // =========================
+
+    loadCurrentUser();
+function showWhatsAppConnect() {
+    document.getElementById("whatsappModal").style.display = "flex";
+
+    document.getElementById("whatsappNumber").focus();
+
+    document.getElementById("pairMessage").textContent = "";
+
+    document.getElementById("pairCodeBox").style.display = "none";
+}
+
+function closeWhatsAppConnect() {
+    document.getElementById("whatsappModal").style.display = "none";
+}
+
+
+</script>
+
+<script>
+function showWhatsAppConnect() {
+    document.getElementById("whatsappModal").style.display = "flex";
+
+    const message = document.getElementById("pairMessage");
+    const qrBox = document.getElementById("qrBox");
+    const loading = document.getElementById("qrLoading");
+
+    if (message) message.textContent = "";
+    if (qrBox) qrBox.style.display = "none";
+    if (loading) {
+        loading.style.display = "block";
+        loading.textContent = "Starting WhatsApp connection...";
+    }
+
+    startWhatsAppQR();
+}
+
+function closeWhatsAppConnect() {
+    document.getElementById("whatsappModal").style.display = "none";
+}
+
+async function startWhatsAppQR() {
+    const button = document.getElementById("qrRefreshButton");
+    const loading = document.getElementById("qrLoading");
+    const qrBox = document.getElementById("qrBox");
+    const qrImage = document.getElementById("whatsappQR");
+    const message = document.getElementById("pairMessage");
+
+    if (button) {
+        button.disabled = true;
+        button.textContent = "Starting...";
+    }
+
+    if (loading) {
+        loading.style.display = "block";
+        loading.textContent = "Starting WhatsApp connection...";
+    }
+
+    if (qrBox) qrBox.style.display = "none";
+    if (message) message.textContent = "";
+
+    try {
+        const response = await fetch("/api/whatsapp/start", {
+            method: "POST"
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                data.message || "Unable to start WhatsApp session."
+            );
+        }
+
+        let attempts = 0;
+
+        const pollQR = async () => {
+            attempts++;
+
+            try {
+                const qrResponse = await fetch("/api/whatsapp/qr");
+                const qrData = await qrResponse.json();
+
+                if (!qrResponse.ok) {
+                    throw new Error(
+                        qrData.message || "Unable to get QR code."
+                    );
+                }
+
+                if (qrData.connected) {
+                    if (loading) {
+                        loading.style.display = "block";
+                        loading.textContent =
+                            "WhatsApp connected successfully!";
+                    }
+
+                    if (qrBox) qrBox.style.display = "none";
+
+                    if (message) {
+                        message.textContent =
+                            "WhatsApp is now connected.";
+                    }
+
+                    if (button) {
+                        button.disabled = false;
+                        button.textContent = "Connected";
+                    }
+
+                    return;
+                }
+
+                if (qrData.qr) {
+                    if (qrImage) {
+                        qrImage.src = qrData.qr;
+                    }
+
+                    if (loading) loading.style.display = "none";
+                    if (qrBox) qrBox.style.display = "block";
+
+                    if (button) {
+                        button.disabled = false;
+                        button.textContent = "Refresh QR";
+                    }
+
+                    return;
+                }
+
+                if (attempts < 60) {
+                    setTimeout(pollQR, 1000);
+                    return;
+                }
+
+                if (loading) loading.style.display = "none";
+
+                if (message) {
+                    message.textContent =
+                        "QR code was not received. Try again.";
+                }
+
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = "Try Again";
+                }
+
+            } catch (error) {
+                console.error("QR polling error:", error);
+
+                if (attempts < 10) {
+                    setTimeout(pollQR, 1000);
+                    return;
+                }
+
+                if (loading) loading.style.display = "none";
+
+                if (message) {
+                    message.textContent =
+                        error.message || "Unable to get QR code.";
+                }
+
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = "Try Again";
+                }
+            }
+        };
+
+        pollQR();
+
+    } catch (error) {
+        console.error("WhatsApp start error:", error);
+
+        if (loading) loading.style.display = "none";
+
+        if (message) {
+            message.textContent =
+                error.message || "Unable to start WhatsApp.";
+        }
+
+        if (button) {
+            button.disabled = false;
+            button.textContent = "Try Again";
+        }
+    }
+}
+</script>
+</body>
+</html>
+
+

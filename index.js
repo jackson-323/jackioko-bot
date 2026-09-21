@@ -4,6 +4,7 @@ const express = require('express');
 const path = require('path');
 const session = require('express-session');
 const authRoutes = require('./web/routes/auth');
+const archiveRoutes = require('./web/routes/archive');
 const whatsappSessionManager = require('./web/whatsapp/session-manager');
 const qrcode = require('qrcode-terminal');
 const pino = require('pino');
@@ -81,6 +82,7 @@ async function startHttpServer() {
 
   // Authentication API
   app.use('/api/auth', authRoutes);
+  app.use('/api/archive', archiveRoutes);
 
   // ================================
   // WhatsApp Pairing
@@ -272,7 +274,7 @@ async function startHttpServer() {
   app.get('/api/health', (req, res) => {
     return res.json({
       success: true,
-      service: 'TECHWORD-MD Web',
+      service: 'JACKIOKO TEC Web',
       status: appState.status
     });
   });
@@ -322,7 +324,7 @@ async function startHttpServer() {
 
   app.listen(port, () => {
     logInfo(
-      `TECHWORD-MD web/status server listening on ${port}`
+      `JACKIOKO TEC web/status server listening on ${port}`
     );
   });
 }
