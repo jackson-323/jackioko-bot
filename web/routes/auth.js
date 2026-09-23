@@ -1,42 +1,28 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
-const fs = require("fs");
-const path = require("path");
+const { db } = require("../firebase-admin");
 
 const router = express.Router();
 
-const USERS_FILE = path.join(
-    __dirname,
-    "..",
-    "database",
-    "users.json"
-);
+const USERS_COLLECTION = "users";
 
-function loadUsers() {
-    try {
-        if (!fs.existsSync(USERS_FILE)) {
-            return [];
-        }
+// Find a user by username
+async function findUserByUsername(username) {
+    const cleanUsername = String(username)
+        .trim()
+        .toLowerCase();
 
-        const data = fs.readFileSync(USERS_FILE, "utf8");
+    const snapshot = await db
+        .collection(USERS_COLLECTION)
+        .where("username", "==", cleanUsername)
+        .limit(1)
+        .get();
 
-        if (!data.trim()) {
-            return [];
-        }
-
-        return JSON.parse(data);
-    } catch (error) {
-        console.error("Failed to load users:", error);
-        return [];
+    if (snapshot.empty) {
+        return null;
     }
-}
 
-function saveUsers(users) {
-    fs.writeFileSync(
-        USERS_FILE,
-        JSON.stringify(users, null, 2),
-        "utf8"
-    );
+    return snapshot.docs[0].data();
 }
 
 // REGISTER
@@ -69,11 +55,7 @@ router.post("/register", async (req, res) => {
             });
         }
 
-        const users = loadUsers();
-
-        const existingUser = users.find(
-            user => user.username === cleanUsername
-        );
+        const existingUser = await findUserByUsername(cleanUsername);
 
         if (existingUser) {
             return res.status(409).json({
@@ -91,9 +73,10 @@ router.post("/register", async (req, res) => {
             createdAt: new Date().toISOString()
         };
 
-        users.push(user);
-
-        saveUsers(users);
+        await db
+            .collection(USERS_COLLECTION)
+            .doc(cleanUsername)
+            .create(user);
 
         res.json({
             success: true,
@@ -126,11 +109,7 @@ router.post("/login", async (req, res) => {
             .trim()
             .toLowerCase();
 
-        const users = loadUsers();
-
-        const user = users.find(
-            user => user.username === cleanUsername
-        );
+        const user = await findUserByUsername(cleanUsername);
 
         if (!user) {
             return res.status(401).json({

@@ -45,3 +45,6 @@ web/database/users.json
 
 # WhatsApp session credentials
 database/whatsapp_sessions/
+
+.env
+
