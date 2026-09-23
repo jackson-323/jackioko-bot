@@ -19,6 +19,7 @@ const { handleMessage } = require('../../lib/handler');
 const { readJson } = require('../../lib/database');
 const config = require('../../config');
 const { logInfo, logError } = require('../../lib/logger');
+const { db } = require('../firebase-admin');
 
 const ACTIVE_STATUSES = new Set([
 'waiting',
@@ -32,7 +33,11 @@ constructor() {
 /*
 * sessions:
 *
-* userId -> Map(numberId -> session)
+                const localStats = await fs.lstat(filePath);
+
+                if (localStats.isSymbolicLink()) {
+                    continue;
+                }
 *
 * This allows one web user to connect multiple
 * independent WhatsApp numbers.
@@ -195,6 +200,197 @@ async clearAuthDir(authDir) {
     await fs.emptyDir(authDir);
 }
 
+getAuthFilesCollection(userId, numberId) {
+    const safeUserId = encodeURIComponent(String(userId));
+    const safeNumberId = encodeURIComponent(String(numberId));
+
+    return db
+        .collection('whatsapp_auth')
+        .doc(safeUserId)
+        .collection('numbers')
+        .doc(safeNumberId)
+        .collection('files');
+}
+
+isSafeAuthFilename(filename) {
+    return (
+        typeof filename === 'string' &&
+        filename.length > 0 &&
+        filename === path.basename(filename) &&
+        filename !== '.' &&
+        filename !== '..'
+    );
+}
+
+getSafeAuthFilePath(authDir, filename) {
+    if (!this.isSafeAuthFilename(filename)) {
+        return null;
+    }
+
+    const authRoot = path.resolve(authDir);
+    const filePath = path.resolve(authRoot, filename);
+
+    if (
+        filePath !== authRoot &&
+        !filePath.startsWith(`${authRoot}${path.sep}`)
+    ) {
+        return null;
+    }
+
+    return filePath;
+}
+
+async restoreAuthFiles(session) {
+    try {
+        await fs.ensureDir(session.authDir);
+
+        const snapshot =
+            await this.getAuthFilesCollection(
+                session.userId,
+                session.numberId
+            ).get();
+
+        for (const document of snapshot.docs) {
+            const filename = document.id;
+            const filePath = this.getSafeAuthFilePath(
+                session.authDir,
+                filename
+            );
+            const contents = document.data()?.contents;
+
+            if (!filePath || typeof contents !== 'string') {
+                continue;
+            }
+
+            const persistedAt =
+                document.data()?.updatedAt;
+            const persistedTime =
+                typeof persistedAt?.toMillis === 'function'
+                    ? persistedAt.toMillis()
+                    : new Date(persistedAt || 0).getTime();
+
+            if (await fs.pathExists(filePath)) {
+                const localStats = await fs.lstat(filePath);
+
+                if (localStats.isSymbolicLink()) {
+                    continue;
+                }
+
+                if (
+                    persistedTime &&
+                    localStats.mtimeMs >= persistedTime
+                ) {
+                    continue;
+                }
+            }
+
+            await fs.writeFile(
+                filePath,
+                contents,
+                'utf8'
+            );
+        }
+    } catch (error) {
+        logError(
+            `Failed to restore WhatsApp auth files for ${session.userId}/${session.numberId}`,
+            error
+        );
+    }
+}
+
+async syncAuthFiles(session) {
+    try {
+        await fs.ensureDir(session.authDir);
+
+        const filenames =
+            await fs.readdir(session.authDir);
+        const files = [];
+
+        for (const filename of filenames) {
+            const filePath = this.getSafeAuthFilePath(
+                session.authDir,
+                filename
+            );
+
+            if (!filePath) {
+                continue;
+            }
+
+            const stats = await fs.lstat(filePath);
+
+            if (stats.isFile() && !stats.isSymbolicLink()) {
+                files.push({
+                    filename,
+                    contents: await fs.readFile(
+                        filePath,
+                        'utf8'
+                    )
+                });
+            }
+        }
+
+        const collection =
+            this.getAuthFilesCollection(
+                session.userId,
+                session.numberId
+            );
+        const snapshot = await collection.get();
+        const currentFiles = new Set(
+            files.map(({ filename }) => filename)
+        );
+        const batch = db.batch();
+
+        for (const document of snapshot.docs) {
+            if (!currentFiles.has(document.id)) {
+                batch.delete(document.ref);
+            }
+        }
+
+        for (const file of files) {
+            batch.set(
+                collection.doc(file.filename),
+                {
+                    contents: file.contents,
+                    updatedAt: new Date()
+                }
+            );
+        }
+
+        if (snapshot.size > 0 || files.length > 0) {
+            await batch.commit();
+        }
+    } catch (error) {
+        logError(
+            `Failed to persist WhatsApp auth files for ${session.userId}/${session.numberId}`,
+            error
+        );
+    }
+}
+
+async deletePersistedAuthFiles(session) {
+    try {
+        const snapshot =
+            await this.getAuthFilesCollection(
+                session.userId,
+                session.numberId
+            ).get();
+        const batch = db.batch();
+
+        for (const document of snapshot.docs) {
+            batch.delete(document.ref);
+        }
+
+        if (snapshot.size > 0) {
+            await batch.commit();
+        }
+    } catch (error) {
+        logError(
+            `Failed to delete WhatsApp auth files for ${session.userId}/${session.numberId}`,
+            error
+        );
+    }
+}
+
 async destroySocket(session, { logout = false } = {}) {
     if (!session?.socket) {
         return;
@@ -280,6 +476,8 @@ async connectSession(userId, numberId) {
 
     await this.destroySocket(session);
 
+    await this.restoreAuthFiles(session);
+
     const {
         state,
         saveCreds
@@ -287,7 +485,24 @@ async connectSession(userId, numberId) {
         session.authDir
     );
 
-    session.saveCreds = saveCreds;
+    session.saveCreds = async (...args) => {
+        const result = await saveCreds(...args);
+
+        await this.syncAuthFiles(session);
+
+        return result;
+    };
+
+    const originalKeysSet =
+        state.keys.set.bind(state.keys);
+
+    state.keys.set = async (...args) => {
+        const result = await originalKeysSet(...args);
+
+        await this.syncAuthFiles(session);
+
+        return result;
+    };
 
     session.registered = Boolean(
         state.creds.registered
@@ -906,6 +1121,10 @@ async disconnectSession(
 
     await this.clearAuthDir(
         session.authDir
+    );
+
+    await this.deletePersistedAuthFiles(
+        session
     );
 
     session.status =
