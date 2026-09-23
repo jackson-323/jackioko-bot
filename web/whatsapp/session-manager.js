@@ -544,6 +544,8 @@ async connectSession(userId, numberId) {
 
     session.socket = sock;
 
+    await this.syncAuthFiles(session);
+
     sock.ev.on(
         'creds.update',
         saveCreds
