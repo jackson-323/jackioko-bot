@@ -1,4 +1,4 @@
-﻿require('dotenv').config();
+require('dotenv').config();
 
 const express = require('express');
 const path = require('path');
@@ -63,19 +63,28 @@ async function startHttpServer() {
   app.use(express.urlencoded({ extended: true }));
 
   // Login sessions
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  const sessionSecret =
+    process.env.SESSION_SECRET ||
+    (isProduction
+      ? (() => {
+          throw new Error('SESSION_SECRET is required in production');
+        })()
+      : 'techword-md-development-secret');
+
   app.use(
     session({
-      secret:
-        process.env.SESSION_SECRET ||
-        'techword-md-development-secret',
+      secret: sessionSecret,
 
       resave: false,
       saveUninitialized: false,
 
       cookie: {
         httpOnly: true,
-        secure: false,
-        maxAge: 1000 * 60 * 60 * 24
+        secure: isProduction,
+        sameSite: 'lax',
+        maxAge: 1000 * 60 * 60 * 24 * 30
       }
     })
   );
@@ -461,15 +470,32 @@ process.on('unhandledRejection', (error) => {
   logError('Unhandled rejection', error);
 });
 
-process.on('SIGINT', async () => {
-  logInfo('Shutting down gracefully');
+let isShuttingDown = false;
+
+async function gracefulShutdown(signal) {
+  if (isShuttingDown) {
+    return;
+  }
+  isShuttingDown = true;
+
+  logInfo(`Received ${signal}. Shutting down gracefully...`);
+  try {
+    if (whatsappSessionManager && typeof whatsappSessionManager.shutdown === 'function') {
+      await whatsappSessionManager.shutdown();
+    }
+  } catch (error) {
+    logError('WhatsApp session manager shutdown error', error);
+  }
   try {
     await memory.shutdown();
   } catch (error) {
     logError('Memory shutdown error', error);
   }
   process.exit(0);
-});
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
 startHttpServer().catch((error) => logError('HTTP server failed', error));
 startBot().catch((error) => logError('Bot startup failed', error));
