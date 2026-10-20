@@ -52,6 +52,13 @@ class WhatsAppSessionManager {
 
         this.MAX_BATCH_SIZE = 400; // Strictly under Firestore 500 limit
         this.SYNC_DEBOUNCE_MS = 1500;
+
+        // Stage 2: Retry control constants
+        this.MAX_SYNC_RETRIES = 5;
+        this.BASE_RETRY_MS = 2000;
+        this.MAX_RETRY_MS = 120000; // 2 minutes max
+        this.QUOTA_PAUSE_MS = 30 * 60 * 1000; // 30 minutes
+        this.sessionDiscoveryPromise = null;
     }
 
     setCommandState(appState) {
@@ -187,6 +194,12 @@ class WhatsAppSessionManager {
 
         session.dirtyFiles.set(filename, action);
 
+        // Stage 2: Do not schedule sync while quota is paused — the
+        // resume timer in flushSessionDirtyFiles will take care of it.
+        if (session.quotaPausedUntil && Date.now() < session.quotaPausedUntil) {
+            return;
+        }
+
         if (!session.syncTimer && !session.stopping) {
             session.syncTimer = setTimeout(() => {
                 session.syncTimer = null;
@@ -200,12 +213,41 @@ class WhatsAppSessionManager {
         }
     }
 
+    /**
+     * Detects whether a Firestore error is a quota/resource exhaustion
+     * error that should NOT be retried quickly (daily cap, not a
+     * transient network glitch).
+     */
+    isQuotaExhaustedError(error) {
+        if (!error) {
+            return false;
+        }
+        // gRPC status code 8 = RESOURCE_EXHAUSTED
+        if (error.code === 8) {
+            return true;
+        }
+        const message = String(error.message || '');
+        return (
+            /RESOURCE_EXHAUSTED/i.test(message) ||
+            /quota.?exceeded/i.test(message)
+        );
+    }
+
     async flushSessionDirtyFiles(session, { force = false } = {}) {
         if (!session || (!force && session.stopping) || session.isSyncing) {
             return;
         }
 
         if (!session.dirtyFiles || session.dirtyFiles.size === 0) {
+            return;
+        }
+
+        // Stage 2: Respect quota pause unless forced (shutdown flush)
+        if (
+            !force &&
+            session.quotaPausedUntil &&
+            Date.now() < session.quotaPausedUntil
+        ) {
             return;
         }
 
@@ -304,13 +346,15 @@ class WhatsAppSessionManager {
 
                     try {
                         await batch.commit();
+                        // Reset retry counter on success
+                        session.syncRetryCount = 0;
                     } catch (commitError) {
                         logError(
                             `Firestore batch write failed for ${session.userId}/${session.numberId} (${chunk.length} items)`,
                             commitError
                         );
 
-                        // Retain uncommitted operations in dirty queue so they retry
+                        // Retain uncommitted operations in dirty queue
                         for (const failedOp of chunk) {
                             session.dirtyFiles.set(
                                 failedOp.filename,
@@ -318,7 +362,93 @@ class WhatsAppSessionManager {
                             );
                         }
 
-                        // Schedule retry after 5 seconds if not stopping and not already scheduled
+                        // Also retain any remaining unprocessed chunks
+                        for (
+                            let j = i + this.MAX_BATCH_SIZE;
+                            j < operations.length;
+                            j++
+                        ) {
+                            const remainingOp = operations[j];
+                            if (remainingOp) {
+                                session.dirtyFiles.set(
+                                    remainingOp.filename,
+                                    remainingOp.action
+                                );
+                            }
+                        }
+
+                        // Stage 2: Quota exhaustion → long pause, not infinite 5s retry
+                        if (this.isQuotaExhaustedError(commitError)) {
+                            session.quotaPausedUntil = Date.now() + this.QUOTA_PAUSE_MS;
+                            logError(
+                                `Firestore quota exhausted for ${session.userId}/${session.numberId}. ` +
+                                `Pausing sync for ${this.QUOTA_PAUSE_MS / 60000} minutes. ` +
+                                `${session.dirtyFiles.size} pending file(s) preserved for later sync.`
+                            );
+
+                            // Replace any pending debounce/retry timer so it
+                            // cannot fire during the quota pause and consume
+                            // the only scheduled resume attempt.
+                            if (session.syncTimer) {
+                                clearTimeout(session.syncTimer);
+                                session.syncTimer = null;
+                            }
+
+                            if (!session.stopping) {
+                                session.syncTimer = setTimeout(() => {
+                                    session.syncTimer = null;
+                                    session.quotaPausedUntil = null;
+                                    logInfo(
+                                        `Resuming Firestore sync for ${session.userId}/${session.numberId} ` +
+                                        `after quota pause (${session.dirtyFiles?.size || 0} pending)`
+                                    );
+                                    this.flushSessionDirtyFiles(session).catch((error) => {
+                                        logError(
+                                            `Error in post-quota-pause sync for ${session.userId}/${session.numberId}`,
+                                            error
+                                        );
+                                    });
+                                }, this.QUOTA_PAUSE_MS);
+                            }
+                            break;
+                        }
+
+                        // Stage 2: Transient error → bounded exponential backoff with jitter
+                        if (!session.syncRetryCount) {
+                            session.syncRetryCount = 0;
+                        }
+                        session.syncRetryCount += 1;
+
+                        if (session.syncRetryCount > this.MAX_SYNC_RETRIES) {
+                            logError(
+                                `Max retries (${this.MAX_SYNC_RETRIES}) exceeded for ${session.userId}/${session.numberId}. ` +
+                                `${session.dirtyFiles.size} pending file(s) preserved; retrying after the maximum backoff.`
+                            );
+                            session.syncRetryCount = 0;
+                            // Keep pending writes queued and periodically retry without
+                            // allowing a rapid failure loop.
+                            if (!session.syncTimer && !session.stopping) {
+                                session.syncTimer = setTimeout(() => {
+                                    session.syncTimer = null;
+                                    this.flushSessionDirtyFiles(session).catch((error) => {
+                                        logError(
+                                            `Error in deferred sync for ${session.userId}/${session.numberId}`,
+                                            error
+                                        );
+                                    });
+                                }, this.MAX_RETRY_MS);
+                            }
+                            break;
+                        }
+
+                        const baseDelay = Math.min(
+                            this.BASE_RETRY_MS * Math.pow(2, session.syncRetryCount - 1),
+                            this.MAX_RETRY_MS
+                        );
+                        // Add jitter: 50-150% of base delay
+                        const jitter = 0.5 + Math.random();
+                        const retryDelay = Math.round(baseDelay * jitter);
+
                         if (!session.syncTimer && !session.stopping) {
                             session.syncTimer = setTimeout(() => {
                                 session.syncTimer = null;
@@ -328,7 +458,7 @@ class WhatsAppSessionManager {
                                         error
                                     );
                                 });
-                            }, 5000);
+                            }, retryDelay);
                         }
                         break;
                     }
@@ -368,6 +498,115 @@ class WhatsAppSessionManager {
     }
 
     // ----------------------------------------------------
+    // Stage 1: Local Auth State Verification
+    // ----------------------------------------------------
+
+    isSerializedBuffer(value) {
+        return (
+            value?.type === 'Buffer' &&
+            typeof value.data === 'string' &&
+            value.data.length > 0 &&
+            /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
+                value.data
+            ) &&
+            Buffer.from(value.data, 'base64').length > 0
+        );
+    }
+
+    isBaileysKeyPair(value) {
+        return (
+            this.isSerializedBuffer(value?.public) &&
+            this.isSerializedBuffer(value?.private)
+        );
+    }
+
+    isValidRegisteredAuthCreds(creds) {
+        return Boolean(
+            creds?.registered &&
+            creds?.account &&
+            typeof creds?.me?.id === 'string' &&
+            creds.me.id &&
+            Number.isInteger(creds.registrationId) &&
+            this.isBaileysKeyPair(creds.noiseKey) &&
+            this.isBaileysKeyPair(creds.signedIdentityKey) &&
+            this.isBaileysKeyPair(creds.signedPreKey?.keyPair) &&
+            this.isSerializedBuffer(creds.signedPreKey?.signature)
+        );
+    }
+
+    isValidBaileysKeyFile(filename, value) {
+        const keyMatch = filename.match(
+            /^(pre-key|session|app-state-sync-key)-(.+)\.json$/
+        );
+        if (!keyMatch) {
+            return false;
+        }
+
+        if (keyMatch[1] === 'pre-key') {
+            return this.isBaileysKeyPair(value);
+        }
+        if (keyMatch[1] === 'session') {
+            return this.isSerializedBuffer(value);
+        }
+        return this.isSerializedBuffer(value?.keyData);
+    }
+
+    /**
+     * Checks whether a local auth directory contains a complete,
+     * usable Baileys authentication state (creds.json with
+     * registered flag, account object, AND at least one Signal
+     * encryption key file). A single creds.json alone is NOT
+     * enough — Baileys also needs pre-keys, session keys, and
+     * app-state-sync-keys to reconnect without re-pairing.
+     *
+     * Returns true ONLY when all three conditions are met,
+     * meaning a Firestore restore can be safely skipped.
+     */
+    async hasCompleteLocalAuth(authDir) {
+        try {
+            const credsPath = path.join(authDir, 'creds.json');
+            if (!(await fs.pathExists(credsPath))) {
+                return false;
+            }
+
+            let creds;
+            try {
+                creds = await fs.readJson(credsPath);
+            } catch {
+                return false;
+            }
+
+            // Require the core Baileys credentials, not just a registered
+            // flag that could survive a partial or malformed local write.
+            if (!this.isValidRegisteredAuthCreds(creds)) {
+                return false;
+            }
+
+            const entries = await fs.readdir(authDir);
+            for (const filename of entries) {
+                if (!/^(pre-key|session|app-state-sync-key)-(.+)\.json$/.test(filename)) {
+                    continue;
+                }
+
+                let keyData;
+                try {
+                    keyData = await fs.readJson(path.join(authDir, filename));
+                } catch {
+                    continue;
+                }
+
+                if (this.isValidBaileysKeyFile(filename, keyData)) {
+                    return true;
+                }
+            }
+
+            return false;
+        } catch {
+            return false;
+        }
+    }
+
+    // ----------------------------------------------------
     // Restore & Cleanup Helpers
     // ----------------------------------------------------
 
@@ -384,6 +623,15 @@ class WhatsAppSessionManager {
                 return;
             }
 
+            let localCredsAreRegistered = false;
+            try {
+                const localCreds = await fs.readJson(
+                    path.join(session.authDir, 'creds.json')
+                );
+                localCredsAreRegistered =
+                    this.isValidRegisteredAuthCreds(localCreds);
+            } catch {}
+
             for (const document of snapshot.docs) {
                 const data = document.data();
                 const filename =
@@ -398,6 +646,25 @@ class WhatsAppSessionManager {
 
                 if (!filePath || typeof contents !== 'string') {
                     continue;
+                }
+
+                const fileExists = await fs.pathExists(filePath);
+                if (fileExists) {
+                    if (filename === 'creds.json' && localCredsAreRegistered) {
+                        continue;
+                    }
+
+                    if (filename !== 'creds.json') {
+                        try {
+                            const localContents = await fs.readJson(filePath);
+                            if (
+                                !/^(pre-key|session|app-state-sync-key)-(.+)\.json$/.test(filename) ||
+                                this.isValidBaileysKeyFile(filename, localContents)
+                            ) {
+                                continue;
+                            }
+                        } catch {}
+                    }
                 }
 
                 await fs.writeFile(filePath, contents, 'utf8');
@@ -458,10 +725,18 @@ class WhatsAppSessionManager {
     async autoRestoreSessions() {
         try {
             logInfo('Checking Firestore for existing registered WhatsApp sessions...');
-            const snapshot = await db
-                .collection('whatsapp_sessions')
-                .where('registered', '==', true)
-                .get();
+            if (!this.sessionDiscoveryPromise) {
+                this.sessionDiscoveryPromise = db
+                    .collection('whatsapp_sessions')
+                    .where('registered', '==', true)
+                    .get()
+                    .catch((error) => {
+                        this.sessionDiscoveryPromise = null;
+                        throw error;
+                    });
+            }
+
+            const snapshot = await this.sessionDiscoveryPromise;
 
             if (snapshot.empty) {
                 logInfo('No registered WhatsApp sessions found in Firestore.');
@@ -597,11 +872,10 @@ class WhatsAppSessionManager {
             creds = await fs.readJson(credsPath);
         } catch (error) {
             logError(
-                'Unreadable web WhatsApp creds file; clearing auth directory',
+                'Unreadable web WhatsApp creds file; preserving local auth files',
                 error
             );
 
-            await fs.emptyDir(authDir);
             return true;
         }
 
@@ -614,10 +888,9 @@ class WhatsAppSessionManager {
         }
 
         logInfo(
-            `Clearing incomplete WhatsApp auth state: ${authDir}`
+            `Preserving incomplete WhatsApp auth state for Firestore recovery: ${authDir}`
         );
 
-        await fs.emptyDir(authDir);
         return true;
     }
 
@@ -687,8 +960,24 @@ class WhatsAppSessionManager {
 
         await this.destroySocket(session);
 
-        // 1. Restore auth files from Firestore if available
-        await this.restoreAuthFiles(session);
+        // Stage 1: Only restore from Firestore when the local auth
+        // directory is missing, empty, or incomplete. During ordinary
+        // reconnects the local files are already on disk and valid —
+        // re-reading thousands of documents from Firestore would waste
+        // the daily read quota for nothing.
+        const localAuthComplete = await this.hasCompleteLocalAuth(session.authDir);
+        if (localAuthComplete) {
+            logInfo(
+                `Local auth state is complete for ${userId}/${numberId}; ` +
+                'skipping Firestore restore (quota-safe reconnect)'
+            );
+        } else {
+            logInfo(
+                `Local auth state is missing or incomplete for ${userId}/${numberId}; ` +
+                'restoring from Firestore'
+            );
+            await this.restoreAuthFiles(session);
+        }
 
         // 2. Sanitize incomplete auth AFTER restore has written files to disk
         await this.sanitizeIncompleteAuth(session.authDir);
@@ -1112,7 +1401,11 @@ class WhatsAppSessionManager {
 
                 dirtyFiles: new Map(),
                 syncTimer: null,
-                isSyncing: false
+                isSyncing: false,
+
+                // Stage 2: Retry control
+                syncRetryCount: 0,
+                quotaPausedUntil: null
             };
 
             sessions.set(numberId, session);
@@ -1249,6 +1542,10 @@ class WhatsAppSessionManager {
                     clearTimeout(session.reconnectTimer);
                     session.reconnectTimer = null;
                 }
+
+                // Stage 2: Clear quota pause so shutdown flush can attempt
+                // one final sync of any pending dirty files
+                session.quotaPausedUntil = null;
             }
         }
 

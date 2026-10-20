@@ -107,10 +107,8 @@ module.exports = {
           await message.reply(memoryInfo);
         }
       }
-
-    } catch (error) {
-      await message.reply(ui.status('error', `Error: ${error.message}`));
-    }
-    }
-  }
+} catch (error) {
+  await message.reply(ui.status('error', `Error: ${error.message}`));
+}
+}
 };
