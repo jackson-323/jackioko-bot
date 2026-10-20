@@ -56,6 +56,7 @@ async function startHttpServer() {
   await whatsappSessionManager.init();
   const app = express();
 
+  app.set('trust proxy', 1);
   app.disable('x-powered-by');
 
   // Middleware

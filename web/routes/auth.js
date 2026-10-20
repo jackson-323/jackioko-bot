@@ -133,13 +133,23 @@ router.post("/login", async (req, res) => {
         req.session.userId = user.id;
         req.session.username = user.username;
 
-        res.json({
-            success: true,
-            message: "Login successful.",
-            user: {
-                id: user.id,
-                username: user.username
+        req.session.save((saveErr) => {
+            if (saveErr) {
+                console.error("Session save error:", saveErr);
+                return res.status(500).json({
+                    success: false,
+                    message: "Login session failed."
+                });
             }
+
+            res.json({
+                success: true,
+                message: "Login successful.",
+                user: {
+                    id: user.id,
+                    username: user.username
+                }
+            });
         });
 
     } catch (error) {
